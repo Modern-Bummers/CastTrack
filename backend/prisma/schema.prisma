@@ -160,4 +160,5 @@ model WeatherCache {
 
   waterbody    Waterbody @relation(fields: [waterbodyId], references: [id])
 
- 
+  @@map("weather_cache")
+}
