@@ -47,7 +47,7 @@ reminderRouter.patch(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const reminder = await reminderService.update(
-        req.params.id,
+        req.params.id as string,
         req.user!.userId,
         req.body
       );
@@ -68,7 +68,7 @@ reminderRouter.delete(
   requireAuth,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      await reminderService.delete(req.params.id, req.user!.userId);
+      await reminderService.delete(req.params.id as string, req.user!.userId);
       return res.json({ message: "Reminder deleted" });
     } catch (error) {
       next(error);

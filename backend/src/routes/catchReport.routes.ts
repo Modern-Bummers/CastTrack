@@ -93,7 +93,7 @@ catchReportRouter.patch(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const report = await catchReportService.update(
-        req.params.id,
+        req.params.id as string,
         req.user!.userId,
         req.body
       );
@@ -114,7 +114,7 @@ catchReportRouter.delete(
   requireAuth,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      await catchReportService.delete(req.params.id, req.user!.userId);
+      await catchReportService.delete(req.params.id as string, req.user!.userId);
       return res.json({ message: "Report deleted" });
     } catch (error) {
       next(error);
@@ -128,7 +128,7 @@ catchReportRouter.post(
   requireAuth,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      await catchReportService.flag(req.params.id);
+      await catchReportService.flag(req.params.id as string);
       return res.json({ message: "Report flagged for review" });
     } catch (error) {
       next(error);

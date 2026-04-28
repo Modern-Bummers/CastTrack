@@ -33,7 +33,7 @@ waterbodyRouter.get(
   optionalAuth,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const waterbody = await waterbodyService.getById(req.params.id);
+      const waterbody = await waterbodyService.getById(req.params.id as string);
       return res.json(waterbody);
     } catch (error) {
       next(error);

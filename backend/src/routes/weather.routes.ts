@@ -10,7 +10,7 @@ weatherRouter.get(
   optionalAuth,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const result = await weatherService.getForecast(req.params.waterbodyId);
+      const result = await weatherService.getForecast(req.params.waterbodyId as string);
       return res.json(result);
     } catch (error) {
       next(error);

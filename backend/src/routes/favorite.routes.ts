@@ -46,7 +46,7 @@ favoriteRouter.delete(
   requireAuth,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      await favoriteService.remove(req.user!.userId, req.params.waterbodyId);
+      await favoriteService.remove(req.user!.userId, req.params.waterbodyId as string);
 
       return res.json({ message: "Removed from favorites" });
     } catch (error) {

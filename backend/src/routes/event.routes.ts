@@ -53,7 +53,7 @@ eventRouter.patch(
   requireRole("ADMIN", "MODERATOR"),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const event = await eventService.update(req.params.id, req.body);
+      const event = await eventService.update(req.params.id as string, req.body);
 
       return res.json({
         message: "Event updated",
@@ -72,7 +72,7 @@ eventRouter.delete(
   requireRole("ADMIN"),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      await eventService.delete(req.params.id);
+      await eventService.delete(req.params.id as string);
       return res.json({ message: "Event deleted" });
     } catch (error) {
       next(error);
