@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { api } from "../lib/api";
+import { useAuth } from "../lib/auth";
 import "../style.css";
 
 function adaptWaterbody(w) {
@@ -79,12 +80,17 @@ function mapIcon(text) {
 }
 
 export default function HomePage() {
+    const { isLoggedIn } = useAuth();
+
     const [searchQuery, setSearchQuery] = useState("");
     const [activeFilter, setActiveFilter] = useState("all");
     const [waterbodies, setWaterbodies] = useState([]);
     const [selectedWaterbody, setSelectedWaterbody] = useState(null);
     const [activeTab, setActiveTab] = useState("weather");
-    const [favorites, setFavorites] = useState([]);
+
+    // Favorites are now backed by /api/favorites when the user is logged in.
+    // We store the list of favorited waterbody IDs so we can render starred state.
+    const [favoriteIds, setFavoriteIds] = useState([]);
 
     const [weatherData, setWeatherData] = useState(null);
     const [events, setEvents] = useState([]);
@@ -102,6 +108,20 @@ export default function HomePage() {
                 setWaterbodies([]);
             });
     }, []);
+
+    // Load favorites whenever auth state changes
+    useEffect(() => {
+        if (isLoggedIn) {
+            api.get("/favorites")
+                .then((res) => {
+                    const ids = (res?.data || []).map((f) => f.waterbodyId);
+                    setFavoriteIds(ids);
+                })
+                .catch(() => setFavoriteIds([]));
+        } else {
+            setFavoriteIds([]);
+        }
+    }, [isLoggedIn]);
 
     const filteredWaterbodies = useMemo(() => {
         return waterbodies.filter((w) => {
@@ -125,10 +145,29 @@ export default function HomePage() {
         }
     }
 
-    function toggleFavorite(name) {
-        setFavorites((prev) =>
-            prev.includes(name) ? prev.filter((item) => item !== name) : [...prev, name]
+    async function toggleFavorite(waterbodyId) {
+        if (!isLoggedIn) {
+            alert("Log in to save favorite spots.");
+            return;
+        }
+        const isFavorited = favoriteIds.includes(waterbodyId);
+        // Optimistic update
+        setFavoriteIds((prev) =>
+            isFavorited ? prev.filter((id) => id !== waterbodyId) : [...prev, waterbodyId]
         );
+        try {
+            if (isFavorited) {
+                await api.delete(`/favorites/${waterbodyId}`);
+            } else {
+                await api.post("/favorites", { waterbodyId });
+            }
+        } catch (err) {
+            // Roll back on failure
+            setFavoriteIds((prev) =>
+                isFavorited ? [...prev, waterbodyId] : prev.filter((id) => id !== waterbodyId)
+            );
+            alert(err.message || "Failed to update favorite.");
+        }
     }
 
     async function openWaterbody(waterbody) {
@@ -167,6 +206,12 @@ export default function HomePage() {
     const alerts = weatherData?.alerts || [];
     const topSpecies = trends?.weekly?.topSpecies || [];
     const maxSpeciesCount = topSpecies[0]?.count || 1;
+
+    // Derive the favorite waterbodies list (full objects, not just IDs)
+    const favoriteWaterbodies = useMemo(
+        () => waterbodies.filter((w) => favoriteIds.includes(w.id)),
+        [waterbodies, favoriteIds]
+    );
 
     return (
         <div>
@@ -236,14 +281,16 @@ export default function HomePage() {
                                             <p>{selectedWaterbody.region}</p>
                                             <div className="detail-badge">
                                                 📍 <span>{selectedWaterbody.type}</span>
+                                                &nbsp;·&nbsp;
+                                                🐟 <span>{selectedWaterbody.activity} activity</span>
                                             </div>
                                         </div>
                                         <button
                                             className="fav-btn"
                                             style={{ color: "white", fontSize: "1.4rem" }}
-                                            onClick={() => toggleFavorite(selectedWaterbody.name)}
+                                            onClick={() => toggleFavorite(selectedWaterbody.id)}
                                         >
-                                            {favorites.includes(selectedWaterbody.name) ? "★" : "☆"}
+                                            {favoriteIds.includes(selectedWaterbody.id) ? "★" : "☆"}
                                         </button>
                                     </div>
                                 </div>
@@ -426,27 +473,28 @@ export default function HomePage() {
                             <div className="sidebar-header">⭐ Saved spots</div>
                             <div className="sidebar-body">
                                 <div className="fav-list">
-                                    {favorites.length === 0 ? (
+                                    {!isLoggedIn ? (
                                         <p style={{ fontSize: "12px", color: "var(--text3)" }}>
-                                            No saved spots yet.
+                                            Log in to save spots.
+                                        </p>
+                                    ) : favoriteWaterbodies.length === 0 ? (
+                                        <p style={{ fontSize: "12px", color: "var(--text3)" }}>
+                                            No saved spots yet. Click the star on a waterbody to save it.
                                         </p>
                                     ) : (
-                                        favorites.map((name) => {
-                                            const wb = waterbodies.find((item) => item.name === name);
-                                            return (
-                                                <div key={name} className="fav-item">
-                                                    <div className="fav-dot"></div>
-                                                    <span className="fav-name">{name}</span>
-                                                    <span
-                                                        className="fav-arrow"
-                                                        onClick={() => wb && openWaterbody(wb)}
-                                                        style={{ cursor: "pointer" }}
-                                                    >
-                                                        →
-                                                    </span>
-                                                </div>
-                                            );
-                                        })
+                                        favoriteWaterbodies.map((wb) => (
+                                            <div key={wb.id} className="fav-item">
+                                                <div className="fav-dot"></div>
+                                                <span className="fav-name">{wb.name}</span>
+                                                <span
+                                                    className="fav-arrow"
+                                                    onClick={() => openWaterbody(wb)}
+                                                    style={{ cursor: "pointer" }}
+                                                >
+                                                    →
+                                                </span>
+                                            </div>
+                                        ))
                                     )}
                                 </div>
                             </div>
@@ -470,7 +518,15 @@ export default function HomePage() {
                                             onClick={() => openWaterbody(wb)}
                                         >
                                             <span style={{ fontSize: "13px" }}>{wb.name}</span>
-                                            <span style={{ fontSize: "12px", color: "var(--text3)" }}>{wb.type}</span>
+                                            <span
+                                                style={{
+                                                    fontSize: "12px",
+                                                    color: wb.activity === "High" ? "var(--green)" : "#d97706",
+                                                    fontWeight: 500,
+                                                }}
+                                            >
+                                                {wb.activity === "High" ? "Good ✓" : "Moderate"}
+                                            </span>
                                         </div>
                                     ))}
                                 </div>
