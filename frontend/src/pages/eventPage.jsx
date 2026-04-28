@@ -146,7 +146,6 @@ export default function EventPage() {
             {loading && <div className="content-card"><p>Loading...</p></div>}
             {error && <div className="content-card"><p style={{ color: "#dc2626" }}>{error}</p></div>}
 
-            {/* Create/Edit form (admin/moderator only) */}
             {canManageEvents && showForm && (
                 <form className="content-card" onSubmit={handleSubmit}>
                     <h3>{editingId ? "Edit event" : "Create event"}</h3>
@@ -168,4 +167,162 @@ export default function EventPage() {
                             rows={3}
                         />
                         <select
-       
+                            value={form.category}
+                            onChange={(e) => setForm({ ...form, category: e.target.value })}
+                        >
+                            {CATEGORIES.map((c) => (
+                                <option key={c} value={c}>
+                                    {c.replace(/_/g, " ")}
+                                </option>
+                            ))}
+                        </select>
+                        <select
+                            value={form.waterbodyId}
+                            onChange={(e) => setForm({ ...form, waterbodyId: e.target.value })}
+                        >
+                            <option value="">Statewide / no specific waterbody</option>
+                            {waterbodies.map((w) => (
+                                <option key={w.id} value={w.id}>
+                                    {w.name} ({w.state})
+                                </option>
+                            ))}
+                        </select>
+                        <div style={{ display: "flex", gap: "8px" }}>
+                            <label style={{ flex: 1, fontSize: "13px" }}>
+                                Start date
+                                <input
+                                    type="date"
+                                    value={form.startDate}
+                                    onChange={(e) => setForm({ ...form, startDate: e.target.value })}
+                                    required
+                                    style={{ width: "100%" }}
+                                />
+                            </label>
+                            <label style={{ flex: 1, fontSize: "13px" }}>
+                                End date (optional)
+                                <input
+                                    type="date"
+                                    value={form.endDate}
+                                    onChange={(e) => setForm({ ...form, endDate: e.target.value })}
+                                    style={{ width: "100%" }}
+                                />
+                            </label>
+                        </div>
+                        <input
+                            type="url"
+                            placeholder="Source URL (optional)"
+                            value={form.sourceUrl}
+                            onChange={(e) => setForm({ ...form, sourceUrl: e.target.value })}
+                        />
+                        <div style={{ display: "flex", gap: "8px" }}>
+                            <button type="submit">{editingId ? "Save" : "Create"}</button>
+                            <button type="button" onClick={() => setShowForm(false)}>
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            )}
+
+            <section className="content-grid two-col">
+                <div className="content-card">
+                    <div className="card-header">
+                        <h3>Active Advisories</h3>
+                        <span className="card-badge warning-badge">Priority Alerts</span>
+                    </div>
+
+                    <div className="stack-list">
+                        {advisories.length === 0 && (
+                            <p style={{ color: "var(--text3)" }}>No current advisories.</p>
+                        )}
+                        {advisories.map((advisory) => (
+                            <div key={advisory.id} className="list-card advisory-card">
+                                <div className="list-card-top">
+                                    <h4>{advisory.title}</h4>
+                                    <span className="severity-tag high">
+                                        {advisory.category.replace(/_/g, " ")}
+                                    </span>
+                                </div>
+                                <p className="list-meta">
+                                    {advisory.waterbody?.name || advisory.region || "Statewide"}
+                                </p>
+                                <p>{advisory.description}</p>
+                                {canManageEvents && (
+                                    <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+                                        <button onClick={() => startEdit(advisory)}>Edit</button>
+                                        {canDeleteEvents && (
+                                            <button
+                                                onClick={() => handleDelete(advisory.id)}
+                                                style={{ background: "#dc2626", color: "white" }}
+                                            >
+                                                Delete
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="content-card">
+                    <div className="card-header">
+                        <h3>Upcoming Events</h3>
+                        <span className="card-badge soft">Community Calendar</span>
+                    </div>
+                    {canManageEvents && (
+                        <button onClick={startCreate} style={{ marginBottom: "8px" }}>
+                            + Add Event
+                        </button>
+                    )}
+
+                    <div className="stack-list">
+                        {upcoming.length === 0 && (
+                            <p style={{ color: "var(--text3)" }}>No upcoming events.</p>
+                        )}
+                        {upcoming.map((event) => (
+                            <div key={event.id} className="list-card">
+                                <div className="list-card-top">
+                                    <h4>{event.title}</h4>
+                                    <span className="mini-date">
+                                        {new Date(event.startDate).toLocaleDateString()}
+                                    </span>
+                                </div>
+                                <p className="list-meta">
+                                    {event.waterbody?.name || event.region || "Statewide"}
+                                </p>
+                                <p>{event.description}</p>
+                                {canManageEvents && (
+                                    <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+                                        <button onClick={() => startEdit(event)}>Edit</button>
+                                        {canDeleteEvents && (
+                                            <button
+                                                onClick={() => handleDelete(event.id)}
+                                                style={{ background: "#dc2626", color: "white" }}
+                                            >
+                                                Delete
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </section>
+
+            <section className="content-card summary-card">
+                <div className="card-header">
+                    <h3>Why This Page Matters</h3>
+                    <span className="card-badge">Planning Support</span>
+                </div>
+                <p>
+                    This page combines helpful trip-planning information with public safety
+                    context. Instead of requiring anglers to search multiple websites for
+                    warnings, local events, or environmental notices, CastTrack brings that
+                    information into one organized view.
+                </p>
+            </section>
+        </div>
+    );
+}
