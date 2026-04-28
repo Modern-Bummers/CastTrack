@@ -20,7 +20,7 @@ function mapWeatherData(apiData) {
     const periods = apiData?.forecast?.periods || [];
     const current = periods[0] || {};
     return {
-        temperature: current.temperature != null ? `${current.temperature}F` : "N/A",
+        temperature: current.temperature != null ? `${current.temperature}°F` : "N/A",
         wind: current.windSpeed || "N/A",
         precipitation:
             current.probabilityOfPrecipitation?.value != null
@@ -69,13 +69,13 @@ function mapEvents(apiEvents) {
 }
 
 function mapIcon(text) {
-    if (!text) return "Cloudy";
+    if (!text) return "⛅";
     const t = text.toLowerCase();
-    if (t.includes("storm")) return "Storm";
-    if (t.includes("rain")) return "Rain";
-    if (t.includes("cloud")) return "Cloud";
-    if (t.includes("sun") || t.includes("clear")) return "Sun";
-    return "Cloudy";
+    if (t.includes("storm")) return "⛈️";
+    if (t.includes("rain")) return "🌧️";
+    if (t.includes("cloud")) return "☁️";
+    if (t.includes("sun") || t.includes("clear")) return "☀️";
+    return "⛅";
 }
 
 export default function HomePage() {
@@ -235,7 +235,7 @@ export default function HomePage() {
                                             <h2>{selectedWaterbody.name}</h2>
                                             <p>{selectedWaterbody.region}</p>
                                             <div className="detail-badge">
-                                                <span>{selectedWaterbody.type}</span>
+                                                📍 <span>{selectedWaterbody.type}</span>
                                             </div>
                                         </div>
                                         <button
@@ -243,7 +243,7 @@ export default function HomePage() {
                                             style={{ color: "white", fontSize: "1.4rem" }}
                                             onClick={() => toggleFavorite(selectedWaterbody.name)}
                                         >
-                                            {favorites.includes(selectedWaterbody.name) ? "Saved" : "Save"}
+                                            {favorites.includes(selectedWaterbody.name) ? "★" : "☆"}
                                         </button>
                                     </div>
                                 </div>
@@ -256,10 +256,10 @@ export default function HomePage() {
                                             onClick={() => setActiveTab(tab)}
                                             style={{ cursor: "pointer" }}
                                         >
-                                            {tab === "weather" && "Weather"}
-                                            {tab === "events" && "Advisories"}
-                                            {tab === "catches" && "Catch Reports"}
-                                            {tab === "trends" && "Trends"}
+                                            {tab === "weather" && "🌤 Weather"}
+                                            {tab === "events" && "📋 Advisories"}
+                                            {tab === "catches" && "🎣 Catch Reports"}
+                                            {tab === "trends" && "📈 Trends"}
                                         </div>
                                     ))}
                                 </div>
@@ -268,23 +268,29 @@ export default function HomePage() {
                                     <div className="tab-content active">
                                         {alerts.length > 0 && (
                                             <div className="wx-alert">
-                                                <strong style={{ fontSize: "13px", color: "#991b1b" }}>
-                                                    {alerts[0].title}
-                                                </strong>
+                                                <span>⚠️</span>
+                                                <div>
+                                                    <strong style={{ fontSize: "13px", color: "#991b1b" }}>
+                                                        {alerts[0].title}
+                                                    </strong>
+                                                </div>
                                             </div>
                                         )}
 
                                         <div className="wx-grid">
                                             <div className="wx-card">
-                                                <div className="wx-val">{weather?.temperature || "-"}</div>
+                                                <div className="wx-icon">🌡️</div>
+                                                <div className="wx-val">{weather?.temperature || "—"}</div>
                                                 <div className="wx-label">Temperature</div>
                                             </div>
                                             <div className="wx-card">
-                                                <div className="wx-val">{weather?.wind || "-"}</div>
+                                                <div className="wx-icon">💨</div>
+                                                <div className="wx-val">{weather?.wind || "—"}</div>
                                                 <div className="wx-label">Wind</div>
                                             </div>
                                             <div className="wx-card">
-                                                <div className="wx-val">{weather?.precipitation || "-"}</div>
+                                                <div className="wx-icon">🌧️</div>
+                                                <div className="wx-val">{weather?.precipitation || "—"}</div>
                                                 <div className="wx-label">Precip chance</div>
                                             </div>
                                         </div>
@@ -298,8 +304,8 @@ export default function HomePage() {
                                                 <div key={f.day} className="forecast-cell">
                                                     <div className="fc-day">{f.day}</div>
                                                     <div className="fc-icon">{f.icon}</div>
-                                                    <div className="fc-hi">{f.hi}</div>
-                                                    <div className="fc-lo">{f.lo}</div>
+                                                    <div className="fc-hi">{f.hi}°</div>
+                                                    <div className="fc-lo">{f.lo}°</div>
                                                 </div>
                                             ))}
                                             {forecast.length === 0 && weather && (
@@ -321,12 +327,22 @@ export default function HomePage() {
                                             ) : (
                                                 events.map((event, index) => (
                                                     <div key={index} className="event-item">
+                                                        <div className="event-dot dot-info"></div>
                                                         <div className="event-meta">
-                                                            <div className="event-title">{event.title}</div>
-                                                            <span className="event-cat cat-event">{event.category}</span>
+                                                            <div
+                                                                style={{
+                                                                    display: "flex",
+                                                                    justifyContent: "space-between",
+                                                                    alignItems: "flex-start",
+                                                                    marginBottom: "4px",
+                                                                }}
+                                                            >
+                                                                <div className="event-title">{event.title}</div>
+                                                                <span className="event-cat cat-event">{event.category}</span>
+                                                            </div>
                                                             <div className="event-desc">{event.desc}</div>
                                                             <div className="event-footer">
-                                                                <span className="event-date">{event.date}</span>
+                                                                <span className="event-date">📅 {event.date}</span>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -346,14 +362,16 @@ export default function HomePage() {
                                             ) : (
                                                 catches.map((report) => (
                                                     <div key={report.id} className="report-item">
+                                                        <span className="ri-species">🐟</span>
                                                         <div className="ri-meta">
                                                             <div className="ri-title">
-                                                                {report.species} - {report.method}
+                                                                {report.species} · {report.method}
                                                             </div>
                                                             <div className="ri-sub">
-                                                                {report.user?.displayName || "Anonymous"} - {new Date(report.createdAt).toLocaleString()}
+                                                                {report.user?.displayName || "Anonymous"} · {new Date(report.createdAt).toLocaleString()}
                                                             </div>
                                                         </div>
+                                                        <span className="ri-badge">{report.species.split(" ")[0]}</span>
                                                     </div>
                                                 ))
                                             )}
@@ -405,7 +423,7 @@ export default function HomePage() {
 
                     <div>
                         <div className="sidebar-card">
-                            <div className="sidebar-header">Saved spots</div>
+                            <div className="sidebar-header">⭐ Saved spots</div>
                             <div className="sidebar-body">
                                 <div className="fav-list">
                                     {favorites.length === 0 ? (
@@ -417,13 +435,14 @@ export default function HomePage() {
                                             const wb = waterbodies.find((item) => item.name === name);
                                             return (
                                                 <div key={name} className="fav-item">
+                                                    <div className="fav-dot"></div>
                                                     <span className="fav-name">{name}</span>
                                                     <span
                                                         className="fav-arrow"
                                                         onClick={() => wb && openWaterbody(wb)}
                                                         style={{ cursor: "pointer" }}
                                                     >
-                                                        Open
+                                                        →
                                                     </span>
                                                 </div>
                                             );
@@ -434,7 +453,7 @@ export default function HomePage() {
                         </div>
 
                         <div className="sidebar-card">
-                            <div className="sidebar-header">Quick browse</div>
+                            <div className="sidebar-header">🌊 Quick conditions</div>
                             <div className="sidebar-body">
                                 <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                                     {waterbodies.slice(0, 4).map((wb) => (
