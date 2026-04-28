@@ -99,7 +99,7 @@ export class WeatherService {
       throw new Error(`NWS points request failed: ${pointRes.status}`);
     }
 
-    const pointData = await pointRes.json();
+    const pointData = (await pointRes.json()) as any;
     const forecastUrl = pointData.properties?.forecast;
 
     if (!forecastUrl) {
@@ -118,7 +118,7 @@ export class WeatherService {
       throw new Error(`NWS forecast request failed: ${forecastRes.status}`);
     }
 
-    const forecastData = await forecastRes.json();
+    const forecastData = (await forecastRes.json()) as any;
 
     // Step 3: Optionally fetch alerts
     const alertsUrl = `https://api.weather.gov/alerts/active?point=${lat.toFixed(4)},${lon.toFixed(4)}`;
@@ -131,7 +131,7 @@ export class WeatherService {
         },
       });
       if (alertsRes.ok) {
-        const alertsData = await alertsRes.json();
+        const alertsData = (await alertsRes.json()) as any;
         alerts = alertsData.features || [];
       }
     } catch {
