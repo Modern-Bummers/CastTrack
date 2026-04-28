@@ -1,9 +1,12 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import LoginButton from "./login";
+import { useAuth } from "../lib/auth";
 import "../style.css";
 
 export default function Navbar() {
+  const { isLoggedIn } = useAuth();
+
   return (
     <nav className="header-container">
       <div className="brand-block">
@@ -16,6 +19,7 @@ export default function Navbar() {
         <Link to="/regulationPage">Waterbody & Weather</Link>
         <Link to="/catchPage">Catch Reports</Link>
         <Link to="/eventPage">Events & Advisories</Link>
+        {isLoggedIn && <Link to="/reminders">Reminders</Link>}
       </div>
 
       <div className="right-button">
