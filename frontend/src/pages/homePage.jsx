@@ -2,7 +2,13 @@ import React, { useEffect, useMemo, useState } from "react";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import "../style.css";
+import LicenseReminder from "../components/licenseReminder";
 
+// ─── Adapters ────────────────────────────────────────────────────────────────
+
+// The Prisma waterbody model only has id/name/type/state/lat/lon. The UI was
+// written against a richer mock object, so we fill the missing fields with
+// safe defaults so the existing card/sidebar code keeps working.
 function adaptWaterbody(w) {
     return {
         id: w.id,
@@ -11,6 +17,7 @@ function adaptWaterbody(w) {
         region: w.state ? `${w.state}` : "",
         latitude: w.latitude,
         longitude: w.longitude,
+        // UI-only placeholder fields (real values come in via per-waterbody fetches)
         activity: "Medium",
         species: [],
         reports: 0,
@@ -20,6 +27,7 @@ function adaptWaterbody(w) {
 function mapWeatherData(apiData) {
     const periods = apiData?.forecast?.periods || [];
     const current = periods[0] || {};
+
     return {
         temperature: current.temperature != null ? `${current.temperature}°F` : "N/A",
         wind: current.windSpeed || "N/A",
@@ -40,6 +48,8 @@ function mapWeatherData(apiData) {
     };
 }
 
+// NWS returns alternating day/night periods. Pair them into single days with
+// a real high/low instead of the previous "temperature - 10" hack.
 function pairForecastPeriods(periods) {
     const days = [];
     let i = 0;
@@ -47,13 +57,29 @@ function pairForecastPeriods(periods) {
         const a = periods[i];
         const b = periods[i + 1];
         if (a?.isDaytime && b && !b.isDaytime) {
-            days.push({ name: a.name, shortForecast: a.shortForecast, high: a.temperature, low: b.temperature });
+            days.push({
+                name: a.name,
+                shortForecast: a.shortForecast,
+                high: a.temperature,
+                low: b.temperature,
+            });
             i += 2;
         } else if (!a?.isDaytime && b?.isDaytime) {
-            days.push({ name: b.name, shortForecast: b.shortForecast, high: b.temperature, low: a.temperature });
+            // First period is "Tonight" — use it as low, next as high
+            days.push({
+                name: b.name,
+                shortForecast: b.shortForecast,
+                high: b.temperature,
+                low: a.temperature,
+            });
             i += 2;
         } else {
-            days.push({ name: a.name, shortForecast: a.shortForecast, high: a.temperature, low: a.temperature - 10 });
+            days.push({
+                name: a.name,
+                shortForecast: a.shortForecast,
+                high: a.temperature,
+                low: a.temperature - 10,
+            });
             i += 1;
         }
     }
@@ -79,24 +105,22 @@ function mapIcon(text) {
     return "⛅";
 }
 
-export default function HomePage() {
-    const { isLoggedIn } = useAuth();
+// ─── Component ────────────────────────────────────────────────────────────────
 
+export default function HomePage() {
     const [searchQuery, setSearchQuery] = useState("");
     const [activeFilter, setActiveFilter] = useState("all");
     const [waterbodies, setWaterbodies] = useState([]);
     const [selectedWaterbody, setSelectedWaterbody] = useState(null);
     const [activeTab, setActiveTab] = useState("weather");
-
-    // Favorites are now backed by /api/favorites when the user is logged in.
-    // We store the list of favorited waterbody IDs so we can render starred state.
-    const [favoriteIds, setFavoriteIds] = useState([]);
+    const [favorites, setFavorites] = useState([]);
 
     const [weatherData, setWeatherData] = useState(null);
     const [events, setEvents] = useState([]);
     const [catches, setCatches] = useState([]);
     const [trends, setTrends] = useState(null);
 
+    // Initial waterbody load
     useEffect(() => {
         api.get("/waterbodies")
             .then((res) => {
@@ -109,32 +133,47 @@ export default function HomePage() {
             });
     }, []);
 
-    // Load favorites whenever auth state changes
-    useEffect(() => {
-        if (isLoggedIn) {
-            api.get("/favorites")
-                .then((res) => {
-                    const ids = (res?.data || []).map((f) => f.waterbodyId);
-                    setFavoriteIds(ids);
-                })
-                .catch(() => setFavoriteIds([]));
-        } else {
-            setFavoriteIds([]);
-        }
-    }, [isLoggedIn]);
+    const { isLoggedIn, loading } = useAuth();
 
+    useEffect(() => {
+        if (loading) return; // ⛔ wait for auth to stabilize
+
+        if (!isLoggedIn) {
+            setFavorites([]);
+            return;
+        }
+
+        let cancelled = false;
+
+        api.get("/favorites")
+            .then((res) => {
+                if (cancelled) return;
+                const list = res?.data ?? res ?? [];
+                setFavorites(list.map((f) => f.waterbodyId));
+            })
+            .catch(console.error);
+
+        return () => {
+            cancelled = true;
+        };
+    }, [isLoggedIn, loading]);
+
+    // Filter + search — note: includes `waterbodies` in deps so it recomputes
+    // when the API call resolves
     const filteredWaterbodies = useMemo(() => {
         return waterbodies.filter((w) => {
             const matchesFilter =
                 activeFilter === "all" ||
                 (activeFilter === "ca" && w.region.includes("CA")) ||
                 w.type.toLowerCase() === activeFilter;
+
             const q = searchQuery.trim().toLowerCase();
             const matchesSearch =
                 !q ||
                 w.name.toLowerCase().includes(q) ||
                 (w.region || "").toLowerCase().includes(q) ||
                 (w.type || "").toLowerCase().includes(q);
+
             return matchesFilter && matchesSearch;
         });
     }, [waterbodies, searchQuery, activeFilter]);
@@ -146,27 +185,22 @@ export default function HomePage() {
     }
 
     async function toggleFavorite(waterbodyId) {
-        if (!isLoggedIn) {
-            alert("Log in to save favorite spots.");
-            return;
-        }
-        const isFavorited = favoriteIds.includes(waterbodyId);
-        // Optimistic update
-        setFavoriteIds((prev) =>
-            isFavorited ? prev.filter((id) => id !== waterbodyId) : [...prev, waterbodyId]
+        const isFav = favorites.includes(waterbodyId);
+
+        setFavorites((prev) =>
+            isFav ? prev.filter((id) => id !== waterbodyId)
+                : [...prev, waterbodyId]
         );
+
         try {
-            if (isFavorited) {
+            if (isFav) {
                 await api.delete(`/favorites/${waterbodyId}`);
             } else {
-                await api.post("/favorites", { waterbodyId });
+                await api.post(`/favorites`, { waterbodyId });
             }
         } catch (err) {
-            // Roll back on failure
-            setFavoriteIds((prev) =>
-                isFavorited ? [...prev, waterbodyId] : prev.filter((id) => id !== waterbodyId)
-            );
-            alert(err.message || "Failed to update favorite.");
+            console.error(err);
+            // optional rollback if needed
         }
     }
 
@@ -178,6 +212,7 @@ export default function HomePage() {
         setCatches([]);
         setTrends(null);
 
+        // Fire all per-waterbody requests in parallel; tolerate individual failures
         const [weatherRes, eventsRes, catchRes, trendRes] = await Promise.allSettled([
             api.get(`/weather/${waterbody.id}`),
             api.get(`/events?waterbody_id=${waterbody.id}`),
@@ -207,17 +242,14 @@ export default function HomePage() {
     const topSpecies = trends?.weekly?.topSpecies || [];
     const maxSpeciesCount = topSpecies[0]?.count || 1;
 
-    // Derive the favorite waterbodies list (full objects, not just IDs)
-    const favoriteWaterbodies = useMemo(
-        () => waterbodies.filter((w) => favoriteIds.includes(w.id)),
-        [waterbodies, favoriteIds]
-    );
-
     return (
         <div>
             <section className="hero">
                 <h1>Plan your perfect fishing trip</h1>
-                <p>Weather, advisories, and catch activity in one place for lakes, rivers, and reservoirs.</p>
+                <p>
+                    Weather, advisories, and catch activity in one place for lakes,
+                    rivers, and reservoirs.
+                </p>
 
                 <div className="search-bar">
                     <input
@@ -227,7 +259,9 @@ export default function HomePage() {
                         onChange={(e) => setSearchQuery(e.target.value)}
                         onKeyDown={(e) => e.key === "Enter" && handleSearch()}
                     />
-                    <button className="search-btn" onClick={handleSearch}>Search</button>
+                    <button className="search-btn" onClick={handleSearch}>
+                        Search
+                    </button>
                 </div>
 
                 <div className="filter-chips">
@@ -261,7 +295,11 @@ export default function HomePage() {
 
                         <div className="cards-grid">
                             {filteredWaterbodies.map((w) => (
-                                <div key={w.id} onClick={() => openWaterbody(w)} style={{ cursor: "pointer" }}>
+                                <div
+                                    key={w.id}
+                                    onClick={() => openWaterbody(w)}
+                                    style={{ cursor: "pointer" }}
+                                >
                                     {w.name}
                                 </div>
                             ))}
@@ -279,18 +317,18 @@ export default function HomePage() {
                                         <div>
                                             <h2>{selectedWaterbody.name}</h2>
                                             <p>{selectedWaterbody.region}</p>
+
                                             <div className="detail-badge">
                                                 📍 <span>{selectedWaterbody.type}</span>
-                                                &nbsp;·&nbsp;
-                                                🐟 <span>{selectedWaterbody.activity} activity</span>
                                             </div>
                                         </div>
+
                                         <button
                                             className="fav-btn"
                                             style={{ color: "white", fontSize: "1.4rem" }}
                                             onClick={() => toggleFavorite(selectedWaterbody.id)}
                                         >
-                                            {favoriteIds.includes(selectedWaterbody.id) ? "★" : "☆"}
+                                            {favorites.includes(selectedWaterbody.id) ? "★" : "☆"}
                                         </button>
                                     </div>
                                 </div>
@@ -304,13 +342,14 @@ export default function HomePage() {
                                             style={{ cursor: "pointer" }}
                                         >
                                             {tab === "weather" && "🌤 Weather"}
-                                            {tab === "events" && "📋 Advisories"}
+                                            {tab === "events" && "📋 Advisories / Events"}
                                             {tab === "catches" && "🎣 Catch Reports"}
                                             {tab === "trends" && "📈 Trends"}
                                         </div>
                                     ))}
                                 </div>
 
+                                {/* WEATHER */}
                                 {activeTab === "weather" && (
                                     <div className="tab-content active">
                                         {alerts.length > 0 && (
@@ -364,6 +403,7 @@ export default function HomePage() {
                                     </div>
                                 )}
 
+                                {/* EVENTS */}
                                 {activeTab === "events" && (
                                     <div className="tab-content active">
                                         <div className="event-list">
@@ -399,6 +439,7 @@ export default function HomePage() {
                                     </div>
                                 )}
 
+                                {/* CATCH REPORTS*/}
                                 {activeTab === "catches" && (
                                     <div className="tab-content active">
                                         <div className="report-list">
@@ -415,10 +456,13 @@ export default function HomePage() {
                                                                 {report.species} · {report.method}
                                                             </div>
                                                             <div className="ri-sub">
-                                                                {report.user?.displayName || "Anonymous"} · {new Date(report.createdAt).toLocaleString()}
+                                                                {report.user?.displayName || "Anonymous"} ·{" "}
+                                                                {new Date(report.createdAt).toLocaleString()}
                                                             </div>
                                                         </div>
-                                                        <span className="ri-badge">{report.species.split(" ")[0]}</span>
+                                                        <span className="ri-badge">
+                                                            {report.species.split(" ")[0]}
+                                                        </span>
                                                     </div>
                                                 ))
                                             )}
@@ -426,40 +470,36 @@ export default function HomePage() {
                                     </div>
                                 )}
 
+                                {/* TRENDS */}
                                 {activeTab === "trends" && (
                                     <div className="tab-content active">
                                         <div className="trend-grid">
                                             <div className="trend-card">
                                                 <div className="trend-title">Top species (last 7 days)</div>
                                                 <div className="bar-list">
-                                                    {topSpecies.length === 0 ? (
-                                                        <p style={{ fontSize: "12px", color: "var(--text3)" }}>
-                                                            No reports in the last 7 days.
+                                                {topSpecies.length === 0 ? (
+                                                        <p style={{ color: "var(--text3)", fontSize: "13px" }}>
+                                                            No trend data available.
                                                         </p>
                                                     ) : (
-                                                        topSpecies.map((trend) => (
-                                                            <div key={trend.name} className="bar-item">
-                                                                <span className="bar-label">{trend.name}</span>
+                                                        topSpecies.map((s) => (
+                                                            <div className="bar-row" key={s.species}>
+                                                                <span className="bar-label">{s.species}</span>
+
                                                                 <div className="bar-track">
                                                                     <div
                                                                         className="bar-fill"
-                                                                        style={{ width: `${(trend.count / maxSpeciesCount) * 100}%` }}
-                                                                    ></div>
+                                                                        style={{
+                                                                            width: `${(s.count / maxSpeciesCount) * 100}%`,
+                                                                        }}
+                                                                    />
                                                                 </div>
-                                                                <span className="bar-count">{trend.count}</span>
+
+                                                                <span className="bar-value">{s.count}</span>
                                                             </div>
                                                         ))
                                                     )}
                                                 </div>
-                                            </div>
-
-                                            <div className="trend-card">
-                                                <div className="trend-title">Quick summary</div>
-                                                <p style={{ fontSize: "13px", color: "var(--text2)" }}>
-                                                    {selectedWaterbody.name} had{" "}
-                                                    <strong>{trends?.weekly?.totalReports ?? 0}</strong> report(s) in the last 7 days and{" "}
-                                                    <strong>{trends?.monthly?.totalReports ?? 0}</strong> in the last 30 days.
-                                                </p>
                                             </div>
                                         </div>
                                     </div>
@@ -467,73 +507,77 @@ export default function HomePage() {
                             </div>
                         )}
                     </div>
-
                     <div>
-                        <div className="sidebar-card">
-                            <div className="sidebar-header">⭐ Saved spots</div>
-                            <div className="sidebar-body">
-                                <div className="fav-list">
-                                    {!isLoggedIn ? (
-                                        <p style={{ fontSize: "12px", color: "var(--text3)" }}>
-                                            Log in to save spots.
-                                        </p>
-                                    ) : favoriteWaterbodies.length === 0 ? (
-                                        <p style={{ fontSize: "12px", color: "var(--text3)" }}>
-                                            No saved spots yet. Click the star on a waterbody to save it.
-                                        </p>
-                                    ) : (
-                                        favoriteWaterbodies.map((wb) => (
-                                            <div key={wb.id} className="fav-item">
-                                                <div className="fav-dot"></div>
-                                                <span className="fav-name">{wb.name}</span>
-                                                <span
-                                                    className="fav-arrow"
-                                                    onClick={() => openWaterbody(wb)}
-                                                    style={{ cursor: "pointer" }}
-                                                >
-                                                    →
-                                                </span>
-                                            </div>
-                                        ))
-                                    )}
-                                </div>
-                            </div>
-                        </div>
+            <LicenseReminder />
+            <div className="sidebar-card">
+              <div className="sidebar-header">⭐ Saved spots</div>
+              <div className="sidebar-body">
+                <div className="fav-list">
+                  {favorites.length === 0 ? (
+                    <p style={{ fontSize: "12px",color: "var(--text3)" }}>
+                      No saved spots yet.
+                    </p>
+                  ) : (
+                    favorites.map((id) => {
+                        const wb = waterbodies.find((item) => item.id === id);
 
-                        <div className="sidebar-card">
-                            <div className="sidebar-header">🌊 Quick conditions</div>
-                            <div className="sidebar-body">
-                                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                                    {waterbodies.slice(0, 4).map((wb) => (
-                                        <div
-                                            key={wb.id}
-                                            style={{
-                                                display: "flex",
-                                                justifyContent: "space-between",
-                                                padding: "8px",
-                                                background: "var(--surface2)",
-                                                borderRadius: "8px",
-                                                cursor: "pointer",
-                                            }}
-                                            onClick={() => openWaterbody(wb)}
-                                        >
-                                            <span style={{ fontSize: "13px" }}>{wb.name}</span>
-                                            <span
-                                                style={{
-                                                    fontSize: "12px",
-                                                    color: wb.activity === "High" ? "var(--green)" : "#d97706",
-                                                    fontWeight: 500,
-                                                }}
-                                            >
-                                                {wb.activity === "High" ? "Good ✓" : "Moderate"}
-                                            </span>
-                                        </div>
-                                    ))}
-                                </div>
+                        return (
+                            <div key={id} className="fav-item">
+                                <div className="fav-dot"></div>
+
+                                <span className="fav-name">
+                                    {wb?.name || "Unknown spot"}
+                                </span>
+
+                                <span
+                                    className="fav-arrow"
+                                    onClick={() => wb && openWaterbody(wb)}
+                                >
+                                    →
+                                </span>
                             </div>
-                        </div>
-                    </div>
+                        );
+                    })
+                  )}
                 </div>
+              </div>
+            </div>
+
+            <div className="sidebar-card">
+              <div className="sidebar-header">🌊 Quick conditions</div>
+              <div className="sidebar-body">
+                <div style={{ display: "flex",flexDirection: "column",gap: "8px" }}>
+                  {waterbodies.slice(0,4).map((wb) => (
+                    <div
+                      key={wb.id}
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        padding: "8px",
+                        background: "var(--surface2)",
+                        borderRadius: "8px",
+                        cursor: "pointer",
+                      }}
+                      onClick={() => openWaterbody(wb)}
+                    >
+                      <span style={{ fontSize: "13px" }}>{wb.name}</span>
+                      <span
+                        style={{
+                          fontSize: "12px",
+                          color: wb.activity === "High" ? "var(--green)" : "#d97706",
+                          fontWeight: 500,
+                        }}
+                      >
+                        {wb.activity === "High" ? "Good ✓" : "Moderate"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+                </div>
+                
             </div>
         </div>
     );
