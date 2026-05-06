@@ -5,7 +5,8 @@ import { useAuth } from "../lib/auth";
 import "../style.css";
 
 export default function Navbar() {
-  const { isLoggedIn } = useAuth();
+  const { isLoggedIn, displayName, email, role } = useAuth();
+  const greeting = displayName || email || "Account";
 
   return (
     <nav className="header-container">
@@ -19,10 +20,28 @@ export default function Navbar() {
         <Link to="/regulationPage">Waterbody & Weather</Link>
         <Link to="/catchPage">Catch Reports</Link>
         <Link to="/eventPage">Events & Advisories</Link>
-        {isLoggedIn && <Link to="/reminders">Reminders</Link>}
       </div>
 
-      <div className="right-button">
+      <div className="right-button" style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+        {isLoggedIn && (
+          <span style={{ color: "white", fontSize: "0.95rem", fontWeight: 600 }}>
+            Hi, {greeting}
+            {role && role !== "USER" && (
+              <span
+                style={{
+                  marginLeft: "6px",
+                  background: "rgba(255,255,255,0.2)",
+                  padding: "2px 8px",
+                  borderRadius: "999px",
+                  fontSize: "0.75rem",
+                  fontWeight: 700,
+                }}
+              >
+                {role}
+              </span>
+            )}
+          </span>
+        )}
         <LoginButton />
       </div>
     </nav>

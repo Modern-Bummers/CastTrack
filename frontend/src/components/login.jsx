@@ -22,7 +22,12 @@ export default function Login() {
             const data = await api.post(path, body);
 
             if (isLogin) {
-                setAuth({ token: data.token, role: data.user.role });
+                setAuth({
+                    token: data.token,
+                    role: data.user.role,
+                    email: data.user.email,
+                    displayName: data.user.displayName,
+                });
                 alert("Login successful!");
             } else {
                 alert("Account created! You can now log in.");
