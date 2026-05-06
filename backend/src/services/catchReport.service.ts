@@ -5,8 +5,12 @@ export class CatchReportService {
   /**
    * List catch reports for a waterbody with pagination
    */
-  async list(waterbodyId: string, page = 1, limit = 20) {
-    const where: any = { waterbodyId, flagged: false };
+  async list(waterbodyId?: string, page = 1, limit = 20) {
+    const where: any = { flagged: false };
+
+    if (waterbodyId) {
+      where.waterbodyId = waterbodyId;
+    }
 
     const [reports, total] = await Promise.all([
       prisma.catchReport.findMany({
@@ -31,6 +35,39 @@ export class CatchReportService {
 
     return {
       data: masked,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  /**
+   * List a single user's own catch reports across all waterbodies.
+   * Includes the waterbody name so the frontend can show where each was caught.
+   */
+  async listForUser(userId: string, page = 1, limit = 20) {
+    const where = { userId };
+
+    const [reports, total] = await Promise.all([
+      prisma.catchReport.findMany({
+        where,
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy: { createdAt: "desc" },
+        include: {
+          waterbody: {
+            select: { id: true, name: true, state: true, type: true },
+          },
+        },
+      }),
+      prisma.catchReport.count({ where }),
+    ]);
+
+    return {
+      data: reports,
       pagination: {
         page,
         limit,
@@ -103,7 +140,7 @@ export class CatchReportService {
   /**
    * Get trend summaries for a waterbody (7-day and 30-day)
    */
-  async getTrends(waterbodyId: string) {
+  async getTrends(waterbodyId?: string) {
     const now = new Date();
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
