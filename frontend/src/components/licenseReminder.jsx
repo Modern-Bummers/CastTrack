@@ -45,19 +45,22 @@ export default function LicenseReminder() {
         const payload = {
             licenseExpiration: new Date(value),
             remindDaysBefore: reminder?.remindDaysBefore ?? 7,
-            state: reminder?.state ?? "default",
+            state: reminder?.state ?? "CA",
             enabled: true,
         };
 
-        let saved;
-
-        if (reminder?.id) {
-            saved = await api.patch(`/reminders/${reminder.id}`, payload);
-        } else {
-            saved = await api.post("/reminders", payload);
+        try {
+            let saved;
+            if (reminder?.id) {
+                saved = await api.patch(`/reminders/${reminder.id}`, payload);
+            } else {
+                saved = await api.post("/reminders", payload);
+            }
+            setReminder(saved.data);
+        } catch (err) {
+            console.error("Failed to save reminder:", err);
+            alert(err.message || "Failed to save reminder");
         }
-
-        setReminder(saved.data);
     }
 
     async function reset() {
